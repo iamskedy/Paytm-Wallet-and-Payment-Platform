@@ -36,3 +36,13 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+.env
+.env.local
+.env.production
+apps.zip
+apps(2).zip
+apps (3).zip
+apps (4).zip
+merchant-app-fix
+merchant-app-fix.zip
+apps (2).zip
