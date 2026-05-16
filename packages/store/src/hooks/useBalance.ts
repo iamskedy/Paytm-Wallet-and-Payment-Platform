@@ -1,7 +1,17 @@
-import { useRecoilValue } from "recoil"
-import { balanceAtom } from "../atoms/balance"
+import { atom, useRecoilValue, useSetRecoilState } from "recoil";
+import { useEffect } from "react";
 
-export const useBalance = () => {
-    const value = useRecoilValue(balanceAtom);
-    return value;
+const balanceAtom = atom<number>({ key: "balance", default: 0 });
+
+export function useBalance() {
+  const setBalance = useSetRecoilState(balanceAtom);
+  const balance = useRecoilValue(balanceAtom);
+
+  useEffect(() => {
+    fetch("/api/balance")
+      .then(r => r.json())
+      .then(data => setBalance(data.amount ?? 0));
+  }, []);
+
+  return balance;
 }
