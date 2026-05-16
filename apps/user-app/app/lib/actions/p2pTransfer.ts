@@ -9,7 +9,7 @@ export async function p2pTransfer(toPhone: string, amount: number) {
   if (!session?.user?.id) throw new Error("Not authenticated");
 
   const parsed = P2PSchema.safeParse({ toPhone, amount });
-  if (!parsed.success) throw new Error(parsed.error.issues[0].message);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
 
   const fromUserId = Number(session.user.id);
 
