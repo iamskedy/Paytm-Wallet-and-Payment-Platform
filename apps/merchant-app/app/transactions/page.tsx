@@ -17,7 +17,7 @@ export default async function MerchantTransactions() {
   return (
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-semibold mb-6">Transactions</h1>
-      {merchant?.transactions.map(txn => (
+      {merchant?.transactions.map((txn: any) => (
         <div key={txn.id} className="flex justify-between py-3 border-b">
           <div>
             <p className="text-sm text-gray-400">{txn.timestamp.toLocaleString()}</p>
