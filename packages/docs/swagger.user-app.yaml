@@ -1,0 +1,309 @@
+openapi: 3.0.3
+info:
+  title: User App API
+  description: |
+    Wallet application for end users.
+    - Auth: Phone + Password (NextAuth CredentialsProvider)
+    - Protected routes: `/transfer`, `/p2p`, `/transactions`, `/profile`
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+    description: Local
+  - url: https://app.yourdomain.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Sign in / Sign up via phone and password
+  - name: Balance
+    description: Wallet balance
+  - name: Profile
+    description: Session user profile
+  - name: On-Ramp
+    description: Add money to wallet via bank
+  - name: P2P Transfer
+    description: Send money to another user
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: Set automatically by NextAuth after sign-in
+
+  schemas:
+
+    CredentialsSignInRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone:
+          type: string
+          pattern: '^[0-9]{10}$'
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          example: "mySecurePassword123"
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "42"
+        name:
+          type: string
+          nullable: true
+          example: "Jane Doe"
+        email:
+          type: string
+          description: Stored as phone number
+          example: "9876543210"
+
+    UserBalance:
+      type: object
+      properties:
+        amount:
+          type: integer
+          description: Available balance in paise
+          example: 150000
+        locked:
+          type: integer
+          description: Locked/reserved balance in paise
+          example: 0
+
+    CreateOnRampRequest:
+      type: object
+      required: [amount, provider]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          maximum: 10000000
+          description: Amount in paise (max 1 lakh rupees)
+          example: 50000
+        provider:
+          type: string
+          enum: [HDFC, SBI, AXIS]
+          example: HDFC
+
+    CreateOnRampResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: Pass this to the bank payment page. In dev, send directly to /hdfcWebhook.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    P2PTransferRequest:
+      type: object
+      required: [toPhone, amount]
+      properties:
+        toPhone:
+          type: string
+          pattern: '^[0-9]{10}$'
+          description: Recipient's 10-digit phone number
+          example: "9123456789"
+        amount:
+          type: integer
+          minimum: 1
+          maximum: 10000000
+          description: Amount in paise (max 1 lakh rupees)
+          example: 10000
+
+    P2PTransferResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+
+  /api/auth/signin:
+    post:
+      tags: [Auth]
+      summary: Sign in or auto-register
+      description: |
+        - **Existing user**: validates bcrypt password → sets session cookie
+        - **New user**: creates account + zero balance → sets session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsSignInRequest'
+      responses:
+        "200":
+          description: Signed in — session cookie is set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: next-auth.session-token (HTTP-only)
+        "401":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/balance:
+    get:
+      tags: [Balance]
+      summary: Get wallet balance
+      description: Returns `amount` (available) and `locked` balance for the session user.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Balance fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBalance'
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Unauthorized
+
+  /api/user:
+    get:
+      tags: [Profile]
+      summary: Get session user profile
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Returns user object from session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/UserProfile'
+        "403":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: You are not logged in
+
+  /api/createOnRampTransaction:
+    post:
+      tags: [On-Ramp]
+      summary: Initiate a bank deposit
+      description: |
+        Creates an `OnRampTransaction` with status `Processing` and returns a UUID token.
+
+        **Flow:**
+        1. Call this endpoint → get `token`
+        2. Redirect user to bank payment page with `token`
+        3. Bank calls `POST /hdfcWebhook` on the webhook service after payment
+
+        Validated against `OnRampSchema`:
+        - `amount`: positive integer, max `10000000` paise (₹1,00,000)
+        - `provider`: one of `HDFC`, `SBI`, `AXIS`
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOnRampRequest'
+      responses:
+        "200":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOnRampResponse'
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Invalid input
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/p2pTransfer:
+    post:
+      tags: [P2P Transfer]
+      summary: Send money to another user
+      description: |
+        Atomic P2P transfer. Uses a serializable DB transaction to prevent race conditions.
+
+        **Business rules:**
+        - `toPhone` must be a registered user
+        - Cannot send to yourself
+        - Sender must have sufficient balance
+        - Debits sender, credits recipient, records a `P2pTransfer` row — all atomically
+
+        Validated against `P2PSchema`:
+        - `toPhone`: exactly 10 digits
+        - `amount`: positive integer, max `10000000` paise (₹1,00,000)
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/P2PTransferRequest'
+      responses:
+        "200":
+          description: Transfer successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/P2PTransferResponse'
+        "400":
+          description: Validation error / recipient not found / self-transfer / insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidPhone:
+                  value:
+                    message: Invalid phone number
+                notFound:
+                  value:
+                    message: Recipient not found
+                selfTransfer:
+                  value:
+                    message: Cannot send money to yourself
+                insufficientBalance:
+                  value:
+                    message: Insufficient balance
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Bank Webhook Service API
+  description: |
+    Express.js service (port 3003) that receives payment confirmations from HDFC bank.
+
+    **Security:** Every request must include a valid HMAC-SHA256 signature in the
+    `x-hdfc-signature` header, computed as:
+    ```
+    HMAC-SHA256(process.env.HDFC_WEBHOOK_SECRET, JSON.stringify(requestBody))
+    ```
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3003
+    description: Local
+  - url: https://webhook.yourdomain.com
+    description: Production
+
+tags:
+  - name: Webhook
+    description: Bank payment callbacks
+  - name: Health
+    description: Service health
+
+components:
+  securitySchemes:
+    hmacSignature:
+      type: apiKey
+      in: header
+      name: x-hdfc-signature
+      description: |
+        HMAC-SHA256 of the raw JSON request body.
+        ```
+        const sig = crypto
+          .createHmac('sha256', process.env.HDFC_WEBHOOK_SECRET)
+          .update(JSON.stringify(body))
+          .digest('hex');
+        ```
+
+  schemas:
+
+    WebhookRequest:
+      type: object
+      required: [token, user_identifier, amount]
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: UUID token from the OnRampTransaction record
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        user_identifier:
+          type: string
+          description: Bank-side user identifier
+          example: "HDFC_USER_7890"
+        amount:
+          type: integer
+          minimum: 1
+          description: |
+            Amount credited by the bank in paise.
+            Validated against `WebhookSchema`: positive number, no upper limit.
+          example: 50000
+
+    WebhookResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+
+  /hdfcWebhook:
+    post:
+      tags: [Webhook]
+      summary: Receive HDFC payment confirmation
+      description: |
+        Called by HDFC bank after a user completes payment on their portal.
+
+        **Processing flow:**
+        1. Verify `x-hdfc-signature` HMAC → 401 if invalid
+        2. Validate body against `WebhookSchema` (Zod) → 400 if invalid
+        3. Look up `OnRampTransaction` by `token` → 400 if not found
+        4. **Idempotency check**: if status is already `Success` → return 200 without re-processing
+        5. If status is `Failure` → return 400
+        6. **Atomic DB transaction**:
+           - `Balance.upsert` → increment user's amount
+           - `OnRampTransaction.update` → set status to `Success`
+        7. On any DB error → set status to `Failure`, return 500
+
+        **Validated against `WebhookSchema`:**
+        - `token`: any string (UUID expected)
+        - `user_identifier`: any string
+        - `amount`: positive number (minimum 1)
+      security:
+        - hmacSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        "200":
+          description: Payment processed (or already processed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+              examples:
+                processed:
+                  summary: Successfully processed
+                  value:
+                    message: Payment processed successfully
+                alreadyDone:
+                  summary: Idempotent — was already processed
+                  value:
+                    message: Already processed
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidPayload:
+                  value:
+                    message: Invalid payload
+                notFound:
+                  value:
+                    message: Transaction not found
+                alreadyFailed:
+                  value:
+                    message: Transaction already failed
+        "401":
+          description: HMAC signature missing or does not match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Invalid signature
+        "500":
+          description: DB error — transaction marked as Failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Internal server error
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns `ok` if the Express server is running. No auth required.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok

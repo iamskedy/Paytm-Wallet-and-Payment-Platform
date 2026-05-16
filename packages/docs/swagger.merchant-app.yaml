@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Merchant App API
+  description: |
+    Dashboard for merchants to view their incoming payment balance.
+    - Auth: Google OAuth (NextAuth GoogleProvider)
+    - On sign-in, merchant is upserted into the `Merchant` table
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3001
+    description: Local
+  - url: https://merchant.yourdomain.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Google OAuth via NextAuth
+  - name: Balance
+    description: Merchant account balance
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: Set automatically by NextAuth after Google sign-in
+
+  schemas:
+
+    MerchantBalance:
+      type: object
+      properties:
+        amount:
+          type: integer
+          description: Merchant balance in paise
+          example: 500000
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+
+  /api/auth/signin:
+    get:
+      tags: [Auth]
+      summary: Initiate Google OAuth sign-in
+      description: |
+        Redirects the user to Google's OAuth consent screen.
+        On success, Google redirects back to `/api/auth/callback/google`.
+
+        The `signIn` callback upserts a `Merchant` row with:
+        - `email`, `name` from Google profile
+        - `auth_type: "Google"`
+      responses:
+        "302":
+          description: Redirect to Google OAuth
+
+  /api/auth/callback/google:
+    get:
+      tags: [Auth]
+      summary: Google OAuth callback (handled by NextAuth)
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: Authorization code from Google
+        - in: query
+          name: state
+          schema:
+            type: string
+          description: CSRF state token
+      responses:
+        "302":
+          description: Signed in — redirects to app, session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: next-auth.session-token (HTTP-only)
+        "401":
+          description: OAuth failed or email missing
+
+  /api/balance:
+    get:
+      tags: [Balance]
+      summary: Get merchant balance
+      description: |
+        Looks up merchant by `session.user.email`, returns their balance.
+        Returns `0` if no balance record exists yet.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Balance fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantBalance'
+              example:
+                amount: 500000
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Unauthorized
