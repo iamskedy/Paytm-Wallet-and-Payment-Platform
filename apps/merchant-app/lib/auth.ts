@@ -1,7 +1,6 @@
 import GoogleProvider from "next-auth/providers/google";
 import db from "@repo/db/client";
-import type { Account } from "next-auth";
-import type { AdapterUser } from "next-auth/adapters";
+import type { Account, User } from "next-auth";
 
 export const authOptions = {
     providers: [
@@ -12,7 +11,7 @@ export const authOptions = {
     ],
     callbacks: {
         async signIn({ user, account }: {
-            user: AdapterUser;
+            user: User;
             account: Account | null;
         }) {
             if (!user || !user.email) {
