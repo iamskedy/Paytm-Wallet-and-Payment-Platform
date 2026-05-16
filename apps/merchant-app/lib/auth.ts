@@ -1,5 +1,7 @@
 import GoogleProvider from "next-auth/providers/google";
 import db from "@repo/db/client";
+import type { Account } from "next-auth";
+import type { AdapterUser } from "next-auth/adapters";
 
 export const authOptions = {
     providers: [
@@ -10,13 +12,8 @@ export const authOptions = {
     ],
     callbacks: {
         async signIn({ user, account }: {
-            user: {
-                email: string;
-                name: string;
-            },
-            account: {
-                provider: "google" | "github"
-            }
+            user: AdapterUser;
+            account: Account | null;
         }) {
             if (!user || !user.email) {
                 return false;
@@ -27,12 +24,12 @@ export const authOptions = {
                 where: { email: user.email },
                 create: {
                     email: user.email,
-                    name: user.name,
-                    auth_type: account.provider === "google" ? "Google" : "Github"
+                    name: user.name ?? "",
+                    auth_type: account?.provider === "google" ? "Google" : "Github"
                 },
                 update: {
-                    name: user.name,
-                    auth_type: account.provider === "google" ? "Google" : "Github"
+                    name: user.name ?? "",
+                    auth_type: account?.provider === "google" ? "Google" : "Github"
                 }
             });
 
