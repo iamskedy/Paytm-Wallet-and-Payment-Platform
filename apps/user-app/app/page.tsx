@@ -5,8 +5,13 @@ import { Appbar } from "@repo/ui/appbar";
 export default function Page(): JSX.Element {
   const session = useSession();
   return (
-   <div>
+    <div>
       <Appbar onSignin={signIn} onSignout={signOut} user={session.data?.user} />
-   </div>
+      {!session.data?.user && (
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "4rem" }}>
+          <button onClick={() => signIn()}>Sign in with phone</button>
+        </div>
+      )}
+    </div>
   );
 }
