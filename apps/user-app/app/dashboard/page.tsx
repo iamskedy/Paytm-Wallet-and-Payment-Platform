@@ -12,7 +12,7 @@ export default async function Dashboard() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/api/auth/signin");
 
-  const userId = Number(session.user.id);
+  const userId = parseInt(session.user.id);
 
   const [balance, onRamp, sent, received] = await Promise.all([
     db.balance.findUnique({ where: { userId } }),

@@ -1,23 +1,33 @@
-import { getServerSession } from "next-auth"
 import { NextResponse } from "next/server";
-import { authOptions } from "../../lib/auth";
+import db from "@repo/db/client";
+import bcrypt from "bcrypt";
 
 export const GET = async () => {
-    const session = await getServerSession(authOptions);
+  return NextResponse.json({ message: "hi there" });
+};
 
-    if (!session) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = async (req: Request) => {
+  const { name, number, password } = await req.json();
 
-    if (!session.user) {
-        return NextResponse.json({
-            message: "You are not logged in"
-        }, {
-            status: 403
-        })
-    }
+  if (!number || !password) {
+    return NextResponse.json({ message: "Phone and password required" }, { status: 400 });
+  }
 
-    return NextResponse.json({
-        user: session.user
-    })
-}
+  const existing = await db.user.findFirst({ where: { number } });
+  if (existing) {
+    return NextResponse.json({ message: "Phone number already registered" }, { status: 409 });
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+
+  await db.user.create({
+    data: {
+      name: name ?? "",
+      number,
+      password: hashed,
+      auth_type: "Credentials",
+    },
+  });
+
+  return NextResponse.json({ success: true });
+};
