@@ -1,7 +1,7 @@
 "use client";
-import { signIn, useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Page(): JSX.Element {
   const [phone, setPhone] = useState("");
@@ -10,21 +10,6 @@ export default function Page(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { status } = useSession();
-
-  // If already logged in, skip login page
-  useEffect(() => {
-    if (status === "authenticated") {
-      const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
-      router.push(callbackUrl);
-    }
-  }, [status, router, searchParams]);
-
-  // Show blank screen while checking session or redirecting
-  if (status === "loading" || status === "authenticated") {
-    return <div style={{ background: "var(--bg)", minHeight: "100vh" }} />;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +23,7 @@ export default function Page(): JSX.Element {
     });
     setLoading(false);
     if (res?.ok) {
-      const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
-      router.push(callbackUrl);
+      router.push("/dashboard");
     } else {
       setError("Invalid phone number or password.");
     }
@@ -47,6 +31,7 @@ export default function Page(): JSX.Element {
 
   return (
     <div className="pf-login-bg">
+      {/* Glow blobs */}
       <div style={{
         position: "absolute", top: -150, left: -100,
         width: 500, height: 500, borderRadius: "50%",
@@ -60,13 +45,16 @@ export default function Page(): JSX.Element {
         filter: "blur(80px)", pointerEvents: "none"
       }} />
 
+      {/* Card */}
       <div className="pf-card pf-anim-rise" style={{ width: "100%", maxWidth: 440, padding: 40, margin: "0 16px", position: "relative", overflow: "hidden" }}>
+        {/* Top shine */}
         <div style={{
           position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)",
           width: "60%", height: 1,
           background: "linear-gradient(90deg, transparent, #60A5FA, transparent)"
         }} />
 
+        {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10,
@@ -91,6 +79,7 @@ export default function Page(): JSX.Element {
         </p>
 
         <form onSubmit={handleSubmit}>
+          {/* Phone */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text2)", marginBottom: 7 }}>
               Phone Number
@@ -112,6 +101,7 @@ export default function Page(): JSX.Element {
             </div>
           </div>
 
+          {/* Password */}
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text2)", marginBottom: 7 }}>
               Password
