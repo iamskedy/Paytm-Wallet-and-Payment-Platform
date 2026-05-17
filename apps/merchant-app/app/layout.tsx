@@ -85,12 +85,12 @@ export default async function RootLayout({
                 {/* User chip */}
                 <div style={{ borderTop: "1px solid var(--border)", padding: "12px 8px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10 }}>
-                    {session.user.image ? (
+                    {session.user?.image  ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={session.user.image} alt="" style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0 }} />
+                      <img src={session.user?.image } alt="" style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0 }} />
                     ) : (
                       <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#059669,#0D9488)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                        {session.user.name?.[0]?.toUpperCase() ?? "M"}
+                        {session.user?.name?.[0]?.toUpperCase() ?? "M"}
                       </div>
                     )}
                     <div style={{ minWidth: 0 }}>
