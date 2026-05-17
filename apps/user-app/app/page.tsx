@@ -1,7 +1,7 @@
 "use client";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function Page(): JSX.Element {
   const [phone, setPhone] = useState("");
@@ -10,8 +10,9 @@ export default function Page(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams(); 
 
-  const handleSubmit = async (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone || !password) { setError("Please fill in all fields."); return; }
     setLoading(true);
@@ -23,7 +24,8 @@ export default function Page(): JSX.Element {
     });
     setLoading(false);
     if (res?.ok) {
-      router.push("/dashboard");
+      const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";  // ← add this
+      router.push(callbackUrl);  // ← change from hardcoded "/dashboard"
     } else {
       setError("Invalid phone number or password.");
     }
