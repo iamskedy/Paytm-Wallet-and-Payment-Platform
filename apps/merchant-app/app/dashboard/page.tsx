@@ -4,7 +4,7 @@ import db from "@repo/db/client";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-function fmt(paise: number) {
+function fmt(paise: number) getUserLabel
   return (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -161,7 +161,7 @@ export default async function MerchantDashboard() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontFamily: "var(--font-head)", fontSize: 13, fontWeight: 700, color: "#10B981"
                   }}>
-                    {getUserLabel(txn)[0].toUpperCase()}
+                    {(getUserLabel(txn)[0] ?? "U").toUpperCase()}
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{getUserLabel(txn)}</div>
