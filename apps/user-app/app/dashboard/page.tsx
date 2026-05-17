@@ -40,8 +40,7 @@ export default async function Dashboard() {
   const totalSent = sent.reduce((a, t) => a + t.amount, 0);
   const totalReceived = received.reduce((a, t) => a + t.amount, 0);
 
-  const initials = (name: string | null | undefined) =>
-    (name ?? "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  
 
   return (
     <div>
