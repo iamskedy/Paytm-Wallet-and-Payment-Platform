@@ -11,9 +11,10 @@ datasource db {
 model User {
   id                Int                 @id @default(autoincrement())
   email             String?             @unique
-  number            String              @unique
-  password          String
+  number            String?              @unique @default("")
+  password          String              @default("")
   name              String?
+  auth_type         AuthType          @default(Credentials)
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   onRampTransaction OnRampTransaction[]
@@ -26,6 +27,7 @@ model Merchant {
   id           Int                     @id @default(autoincrement())
   email        String                  @unique
   name         String?
+  number       String?                 // Phone number — collected during onboarding
   auth_type    AuthType
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
@@ -89,4 +91,5 @@ enum OnRampStatus {
 enum AuthType {
   Google
   Github
+  Credentials
 }

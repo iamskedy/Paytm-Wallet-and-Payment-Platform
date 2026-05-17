@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "prisma generate",
+    "dev": "echo Prisma already generated, skipping...",
     "build": "prisma generate",
     "db:push": "prisma db push --skip-generate",
     "db:migrate": "prisma migrate dev",
