@@ -4,7 +4,8 @@ import db from "@repo/db/client";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-function fmt(paise: number) getUserLabel
+
+function fmt(paise: number) {
   return (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
