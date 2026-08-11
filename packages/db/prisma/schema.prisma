@@ -21,6 +21,7 @@ model User {
   balance           Balance?
   sentTransfers     p2pTransfer[]       @relation("FromUser")
   receivedTransfers p2pTransfer[]       @relation("ToUser")
+  payoutTransactions PayoutTransaction[]
 }
 
 model Merchant {
@@ -33,6 +34,9 @@ model Merchant {
   updatedAt    DateTime                @updatedAt
   balance      MerchantBalance?
   transactions MerchantTransaction[]
+  payoutTransactions  MerchantPayoutTransaction[]
+  transactionsOut     MerchantTransactionOut[]
+  paymentRequests     PaymentRequest[]
 }
 
 model Balance {
@@ -80,6 +84,47 @@ model MerchantTransaction {
   fromUserId Int
   status     String   @default("completed")
   merchant   Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model PayoutTransaction {
+  id        Int          @id @default(autoincrement())
+  status    OnRampStatus // reuse existing Processing/Success/Failure enum
+  token     String       @unique
+  provider  String
+  amount    Int
+  startTime DateTime
+  userId    Int
+  user      User         @relation(fields: [userId], references: [id])
+}
+
+model MerchantPayoutTransaction {
+  id         Int          @id @default(autoincrement())
+  status     OnRampStatus
+  token      String       @unique
+  provider   String
+  amount     Int
+  startTime  DateTime
+  merchantId Int
+  merchant   Merchant     @relation(fields: [merchantId], references: [id])
+}
+
+model MerchantTransactionOut {  // merchant -> user payout / refund
+  id         Int      @id @default(autoincrement())
+  amount     Int
+  timestamp  DateTime @default(now())
+  merchantId Int
+  toUserId   Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model PaymentRequest {  // real payment-link records (replaces the client-side Math.random() id)
+  id          String   @id @default(cuid())
+  merchantId  Int
+  amount      Int
+  description String
+  status      String   @default("pending") // pending | paid | expired
+  createdAt   DateTime @default(now())
+  merchant    Merchant @relation(fields: [merchantId], references: [id])
 }
 
 enum OnRampStatus {
