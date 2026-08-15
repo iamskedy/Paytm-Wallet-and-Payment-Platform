@@ -5,6 +5,11 @@ export const OnRampSchema = z.object({
   provider: z.enum(["HDFC", "SBI", "AXIS"])
 });
 
+export const WithdrawSchema = z.object({
+  amount: z.number().positive().max(10000000),
+  provider: z.enum(["HDFC", "SBI", "AXIS"])
+});
+
 export const P2PSchema = z.object({
   toPhone: z.string().regex(/^[0-9]{10}$/, "Invalid phone number"),
   amount: z.number().positive().max(10000000)

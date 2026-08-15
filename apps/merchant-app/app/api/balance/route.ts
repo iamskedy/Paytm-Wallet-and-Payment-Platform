@@ -15,6 +15,7 @@ export const GET = async () => {
   });
 
   return NextResponse.json({
-    amount: merchant?.balance?.amount ?? 0
+    amount: merchant?.balance?.amount ?? 0,
+    locked: merchant?.balance?.locked ?? 0
   });
 };
