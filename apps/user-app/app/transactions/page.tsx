@@ -12,7 +12,7 @@ export default async function Transactions() {
   if (!session?.user) redirect("/api/auth/signin");
   const userId = Number(session.user.id);
 
-  const [onRamp, sent, received] = await Promise.all([
+  const [onRamp, sent, received, merchantSent, withdrawals] = await Promise.all([
     db.onRampTransaction.findMany({
       where: { userId },
       orderBy: { startTime: "desc" },
@@ -30,11 +30,26 @@ export default async function Transactions() {
       orderBy: { timestamp: "desc" },
       take: 50,
     }),
+    db.merchantTransaction.findMany({
+      where: { fromUserId: userId },
+      include: { merchant: { select: { name: true, email: true } } },
+      orderBy: { timestamp: "desc" },
+      take: 50,
+    }),
+    db.payoutTransaction.findMany({
+      where: { userId },
+      orderBy: { startTime: "desc" },
+      take: 50,
+    }),
   ]);
 
   const totalTopup = onRamp.reduce((a, t) => a + t.amount, 0);
-  const totalSent = sent.reduce((a, t) => a + t.amount, 0);
+  const totalP2pSent = sent.reduce((a, t) => a + t.amount, 0);
+  const totalMerchantSent = merchantSent.reduce((a, t) => a + t.amount, 0);
+  const totalSent = totalP2pSent + totalMerchantSent;
   const totalReceived = received.reduce((a, t) => a + t.amount, 0);
+  const totalWithdrawn = withdrawals.reduce((a, t) => a + t.amount, 0);
+  const sentCount = sent.length + merchantSent.length;
 
   const statusColor = (s: string) =>
     s === "Success" ? "#34D399" : s === "Failure" ? "#F87171" : "#FBB350";
@@ -53,7 +68,7 @@ export default async function Transactions() {
       <div style={{ padding: 28 }}>
 
         {/* Summary stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 28 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
           <div className="pf-stat">
             <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>Added</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 500, color: "#60A5FA" }}>₹{fmt(totalTopup)}</div>
@@ -62,12 +77,17 @@ export default async function Transactions() {
           <div className="pf-stat">
             <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>Sent</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 500, color: "#F87171" }}>₹{fmt(totalSent)}</div>
-            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{sent.length} transfers</div>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{sentCount} transfers</div>
           </div>
           <div className="pf-stat">
             <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>Received</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 500, color: "#34D399" }}>₹{fmt(totalReceived)}</div>
             <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{received.length} transfers</div>
+          </div>
+          <div className="pf-stat">
+            <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>Withdrawn</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 500, color: "#F87171" }}>₹{fmt(totalWithdrawn)}</div>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{withdrawals.length} withdrawals</div>
           </div>
         </div>
 
@@ -119,6 +139,54 @@ export default async function Transactions() {
           )}
         </div>
 
+        {/* Withdrawals */}
+        <div className="pf-card" style={{ padding: "20px 22px", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 7, background: "rgba(220,38,38,.1)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14
+            }}>🏦</div>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 14, fontWeight: 600 }}>Withdrawals</div>
+            <span style={{
+              marginLeft: "auto", fontSize: 10, padding: "2px 8px", borderRadius: 99,
+              background: "rgba(220,38,38,.1)", color: "#F87171",
+              fontFamily: "var(--font-mono)"
+            }}>{withdrawals.length}</span>
+          </div>
+          {withdrawals.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text3)", fontSize: 13 }}>No withdrawals yet</div>
+          ) : (
+            withdrawals.map(txn => (
+              <div key={txn.id} className="pf-txn-row">
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+                    background: "rgba(220,38,38,.08)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15
+                  }}>🏛️</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{txn.provider}</div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "var(--font-mono)" }}>
+                      {txn.startTime.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, color: "#F87171" }}>
+                    -₹{fmt(txn.amount)}
+                  </div>
+                  <span style={{
+                    fontSize: 10, padding: "1px 6px", borderRadius: 4,
+                    background: statusBg(txn.status), color: statusColor(txn.status)
+                  }}>
+                    {txn.status}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         {/* Money Sent */}
         <div className="pf-card" style={{ padding: "20px 22px", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -147,6 +215,48 @@ export default async function Transactions() {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>
                       {txn.toUser.name ?? txn.toUser.number}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "var(--font-mono)" }}>
+                      {txn.timestamp.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, color: "#F87171" }}>
+                  -₹{fmt(txn.amount)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Merchant Payments */}
+        <div className="pf-card" style={{ padding: "20px 22px", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 7, background: "rgba(220,38,38,.1)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14
+            }}>🛍️</div>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 14, fontWeight: 600 }}>Merchant Payments</div>
+            <span style={{
+              marginLeft: "auto", fontSize: 10, padding: "2px 8px", borderRadius: 99,
+              background: "rgba(220,38,38,.1)", color: "#F87171",
+              fontFamily: "var(--font-mono)"
+            }}>{merchantSent.length}</span>
+          </div>
+          {merchantSent.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text3)", fontSize: 13 }}>No merchant payments yet</div>
+          ) : (
+            merchantSent.map(txn => (
+              <div key={txn.id} className="pf-txn-row">
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+                    background: "rgba(220,38,38,.08)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15
+                  }}>🏪</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>
+                      {txn.merchant.name ?? txn.merchant.email}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "var(--font-mono)" }}>
                       {txn.timestamp.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}

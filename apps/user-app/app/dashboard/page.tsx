@@ -81,7 +81,7 @@ export default async function Dashboard() {
           ) : null}
 
           {/* Quick action buttons */}
-          <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
             <Link href="/transfer" style={{
               display: "flex", alignItems: "center", gap: 7,
               padding: "10px 18px", borderRadius: 10,
@@ -101,6 +101,16 @@ export default async function Dashboard() {
             }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
               Send Money
+            </Link>
+            <Link href="/withdraw" style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "10px 18px", borderRadius: 10,
+              background: "rgba(217,119,6,.15)", border: "1px solid rgba(217,119,6,.25)",
+              color: "#FBBF24", fontSize: 13, fontWeight: 500, textDecoration: "none",
+              transition: "all .2s"
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              Withdraw
             </Link>
             <Link href="/transactions" style={{
               display: "flex", alignItems: "center", gap: 7,

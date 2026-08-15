@@ -16,6 +16,7 @@ export default async function MerchantDashboard() {
   const merchant = await db.merchant.findUnique({
     where: { email: session.user.email },
     include: {
+      balance: true,
       transactions: {
         orderBy: { timestamp: "desc" },
         take: 20,
@@ -80,12 +81,18 @@ export default async function MerchantDashboard() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
             <div>
               <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 500, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
-                Total Settlement Volume
+                Available Balance
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 500, letterSpacing: "-2px", marginBottom: 4 }}>
-                ₹{fmt(totalVolume)}
+                ₹{fmt(merchant?.balance?.amount ?? 0)}
               </div>
-              <div style={{ fontSize: 12, color: "var(--text3)" }}>₹{fmt(todayVolume)} collected today</div>
+              {merchant?.balance?.locked ? (
+                <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                  ₹{fmt(merchant.balance.locked)} locked
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text3)" }}>₹{fmt(todayVolume)} collected today</div>
+              )}
             </div>
             <div style={{
               display: "flex", alignItems: "center", gap: 7, padding: "7px 14px", borderRadius: 99,
@@ -115,6 +122,14 @@ export default async function MerchantDashboard() {
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
               Payment Link
+            </Link>
+            <Link href="/withdraw" style={{
+              display: "flex", alignItems: "center", gap: 7, padding: "10px 18px", borderRadius: 10,
+              background: "rgba(217,119,6,.15)", border: "1px solid rgba(217,119,6,.25)",
+              color: "#FBBF24", fontSize: 13, fontWeight: 500, textDecoration: "none"
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              Withdraw
             </Link>
           </div>
         </div>
