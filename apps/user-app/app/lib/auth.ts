@@ -88,6 +88,17 @@ export const authOptions = {
   ],
 
   secret: process.env.JWT_SECRET || "secret",
+  cookies: {
+    sessionToken: {
+      name: "user-app.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
 
   callbacks: {
     async session({

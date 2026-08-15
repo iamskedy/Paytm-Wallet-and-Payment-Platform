@@ -9,6 +9,17 @@ export const authOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
+  cookies: {
+    sessionToken: {
+      name: "merchant-app.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
   callbacks: {
     async signIn({ user, account }: { user: User; account: Account | null }) {
       if (!user?.email) return false;
