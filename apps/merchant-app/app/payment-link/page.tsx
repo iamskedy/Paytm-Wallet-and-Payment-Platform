@@ -2,12 +2,15 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Appbar } from "@repo/ui/appbar";
 import { useState } from "react";
+import { createPaymentRequest } from "../lib/actions/createPaymentRequest";
 
 export default function PaymentLink() {
   const { data: session, status } = useSession();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (status === "loading") {
     return (
@@ -30,13 +33,20 @@ export default function PaymentLink() {
     );
   }
 
-  const generatePaymentLink = () => {
+  const generatePaymentLink = async () => {
     if (!amount || !description) return;
-
-    // Generate a unique payment link (in a real app, this would be stored in DB)
-    const linkId = Math.random().toString(36).substring(7);
-    const link = `${window.location.origin}/pay/${linkId}?amount=${amount}&description=${encodeURIComponent(description)}`;
-    setGeneratedLink(link);
+    setError("");
+    setLoading(true);
+    try {
+      const amountInPaise = Math.round(parseFloat(amount) * 100);
+      const { id } = await createPaymentRequest(amountInPaise, description);
+      const link = `${window.location.origin}/pay/${id}`;
+      setGeneratedLink(link);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to generate payment link");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -70,11 +80,13 @@ export default function PaymentLink() {
 
           <button
             onClick={generatePaymentLink}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
-            disabled={!amount || !description}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={!amount || !description || loading}
           >
-            Generate Payment Link
+            {loading ? "Generating..." : "Generate Payment Link"}
           </button>
+
+          {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
         </div>
 
         {generatedLink && (
