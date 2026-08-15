@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "node dist/index.js",
-    "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --packages=external"
+   "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --external:@prisma/client --external:express --external:dotenv --external:swagger-ui-express --external:yamljs"
   },
   "keywords": [],
   "author": "",
