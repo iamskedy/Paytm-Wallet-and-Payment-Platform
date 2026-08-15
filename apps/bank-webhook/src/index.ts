@@ -167,6 +167,7 @@ app.post("/hdfcMerchantWithdrawWebhook", verifySignature, async (req, res) => {
 // Health check
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
+const PORT = process.env.PORT || 3003;
 app.listen(PORT, () => {
   console.log(`Bank webhook listening on port ${PORT}`);
 });
