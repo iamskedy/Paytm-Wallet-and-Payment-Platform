@@ -1,0 +1,50 @@
+# Dockerfile for bank-webhook
+# Simple Express/Node server — no Next.js standalone output needed here.
+# Build context must be the MONOREPO ROOT.
+# Example build command from repo root:
+#   docker build -f aws-deployment/Dockerfile.bank-webhook -t payflow-bank-webhook .
+
+FROM node:20-alpine AS base
+
+FROM base AS pruner
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+RUN npm install -g turbo
+COPY . .
+RUN turbo prune bank-webhook --docker
+# ^ swap "bank-webhook" for the exact "name" field in apps/bank-webhook/package.json if different
+
+FROM base AS installer
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+RUN npm install
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=installer /app/ .
+COPY --from=pruner /app/out/full/ .
+# bank-webhook is TypeScript, bundled via esbuild — this build step is required,
+# it produces apps/bank-webhook/dist/index.js
+RUN npx turbo run build --filter=bank-webhook
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 webhook
+USER webhook
+
+# Only copy what's needed at runtime — the bundled dist output and node_modules
+# (esbuild bundles most deps, but @prisma/client, express, dotenv, swagger-ui-express,
+# and yamljs are marked --external in the build script, so they must still be present)
+COPY --from=builder --chown=webhook:nodejs /app/apps/bank-webhook/dist ./apps/bank-webhook/dist
+COPY --from=builder --chown=webhook:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=webhook:nodejs /app/apps/bank-webhook/node_modules ./apps/bank-webhook/node_modules
+
+EXPOSE 3003
+ENV PORT=3003
+
+# package.json has no "start" script — "dev" just runs the already-built file
+# (node dist/index.js), so that's the correct production command too.
+CMD ["node", "apps/bank-webhook/dist/index.js"]

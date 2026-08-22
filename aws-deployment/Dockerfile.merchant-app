@@ -1,0 +1,48 @@
+# Dockerfile for merchant-app
+# Same pattern as user-app — multi-stage build for a Turborepo monorepo Next.js app.
+# Build context must be the MONOREPO ROOT.
+# Example build command from repo root:
+#   docker build -f aws-deployment/Dockerfile.merchant-app -t payflow-merchant-app .
+
+FROM node:20-alpine AS base
+
+FROM base AS pruner
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+RUN npm install -g turbo
+COPY . .
+RUN turbo prune web --docker
+# CONFIRMED: package name is "web" per apps/merchant-app/package.json's "name" field
+# (folder is called merchant-app, but the Turborepo package name is "web" — filter must use "web")
+
+FROM base AS installer
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+RUN npm install
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=installer /app/ .
+COPY --from=pruner /app/out/full/ .
+RUN npx turbo run build --filter=web
+
+# IMPORTANT: apps/merchant-app/next.config.js must have output: 'standalone'
+# NOT CONFIRMED YET — check this file before building, the Dockerfile will fail without it
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+USER nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/.next/static ./apps/merchant-app/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/public ./apps/merchant-app/public
+
+EXPOSE 3001
+ENV PORT=3001
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "apps/merchant-app/server.js"]

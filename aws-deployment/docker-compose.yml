@@ -1,0 +1,51 @@
+# docker-compose.yml
+# For local testing of all three services together before deploying to AWS.
+# Run from monorepo root: docker-compose -f aws-deployment/docker-compose.yml up --build
+
+version: "3.9"
+
+services:
+  user-app:
+    build:
+      context: .
+      dockerfile: aws-deployment/Dockerfile.user-app
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3000
+      - HDFC_WEBHOOK_SECRET=${HDFC_WEBHOOK_SECRET}
+      - BANK_WEBHOOK_URL=http://bank-webhook:3003
+    depends_on:
+      - bank-webhook
+
+  merchant-app:
+    build:
+      context: .
+      dockerfile: aws-deployment/Dockerfile.merchant-app
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3001
+    depends_on:
+      - bank-webhook
+
+  bank-webhook:
+    build:
+      context: .
+      dockerfile: aws-deployment/Dockerfile.bank-webhook
+    ports:
+      - "3003:3003"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - HDFC_WEBHOOK_SECRET=${HDFC_WEBHOOK_SECRET}
+
+# Create a .env file next to this docker-compose.yml (same folder) with real values
+# for DATABASE_URL, DIRECT_URL, NEXTAUTH_SECRET, HDFC_WEBHOOK_SECRET before running.
+# Never commit that .env file.

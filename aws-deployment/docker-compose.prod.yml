@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  user-app:
+    image: ${ECR_REGISTRY}/payflow-user-app:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - BANK_WEBHOOK_URL=http://bank-webhook:3003
+    env_file:
+      - .env.user-app
+    depends_on:
+      - bank-webhook
+
+  merchant-app:
+    image: ${ECR_REGISTRY}/payflow-merchant-app:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.merchant-app
+    depends_on:
+      - bank-webhook
+
+  bank-webhook:
+    image: ${ECR_REGISTRY}/payflow-bank-webhook:latest
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    env_file:
+      - .env.bank-webhook
