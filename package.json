@@ -14,7 +14,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/yamljs": "^0.2.34",
     "prettier": "^3.2.5",
-    "turbo": "latest"
+    "turbo": "^2.10.12"
   },
   "engines": {
     "node": ">=18"
