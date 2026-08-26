@@ -25,7 +25,6 @@ WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=pruner /app/out/full/ .
 COPY packages/docs ./packages/docs
-RUN npx turbo run build --filter=bank-webhook
 # bank-webhook is TypeScript, bundled via esbuild — this build step is required,
 # it produces apps/bank-webhook/dist/index.js
 RUN npx turbo run build --filter=bank-webhook
@@ -41,6 +40,7 @@ USER webhook
 # (esbuild bundles most deps, but @prisma/client, express, dotenv, swagger-ui-express,
 # and yamljs are marked --external in the build script, so they must still be present)
 COPY --from=builder --chown=webhook:nodejs /app/apps/bank-webhook/dist ./apps/bank-webhook/dist
+COPY --from=builder --chown=webhook:nodejs /app/packages/docs ./packages/docs
 COPY --from=builder --chown=webhook:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=webhook:nodejs /app/apps/bank-webhook/node_modules ./apps/bank-webhook/node_modules
 
