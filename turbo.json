@@ -1,11 +1,10 @@
 {
-  
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
         "JWT_SECRET",
         "NEXTAUTH_SECRET",
@@ -15,13 +14,11 @@
         "DATABASE_URL",
         "DIRECT_URL",
         "NEXT_PUBLIC_USER_APP_URL",
-         "HDFC_WEBHOOK_SECRET",
+        "HDFC_WEBHOOK_SECRET",
         "BANK_WEBHOOK_URL",
         "NODE_ENV",
         "NEXT_PUBLIC_MERCHANT_APP_URL"
       ]
-     
-
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -32,4 +29,3 @@
     }
   }
 }
-

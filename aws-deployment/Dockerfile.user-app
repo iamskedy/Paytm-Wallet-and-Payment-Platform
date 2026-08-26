@@ -1,0 +1,23 @@
+# aws-deployment/Dockerfile.user-app
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy the whole monorepo so npm workspaces can resolve @repo/db, @repo/ui, etc.
+COPY . .
+
+# Install dependencies for all workspaces (root + apps/* + packages/*)
+RUN npm install
+
+# Generate the Prisma client — required before Next.js build, since @repo/db imports it
+RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
+
+# Build only the user-app workspace
+RUN npm run build --workspace=user-app
+
+WORKDIR /app/apps/user-app
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
