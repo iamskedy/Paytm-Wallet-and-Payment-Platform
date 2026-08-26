@@ -3,9 +3,30 @@ import { authOptions } from "../lib/auth";
 import db from "@repo/db/client";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { ActivityChart } from "./ActivityChart";
+import { BalanceDonut } from "./BalanceDonut";
 
 function fmt(paise: number) {
   return (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function dayBuckets(days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const keys: string[] = [];
+  const labels: Record<string, string> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    keys.push(key);
+    labels[key] = d.toLocaleDateString("en-IN", { weekday: "short" });
+  }
+  return { keys, labels };
+}
+
+function keyOf(date: Date) {
+  return new Date(date).toISOString().slice(0, 10);
 }
 
 export default async function Dashboard() {
@@ -14,7 +35,14 @@ export default async function Dashboard() {
 
   const userId = parseInt(session.user.id);
 
-  const [balance, onRamp, sent, received] = await Promise.all([
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [
+    balance, onRamp, sent, received, withdrawals, merchantSent,
+    chartTopups, chartSent, chartReceived, chartMerchantSent, chartWithdrawals
+  ] = await Promise.all([
     db.balance.findUnique({ where: { userId } }),
     db.onRampTransaction.findMany({ where: { userId }, orderBy: { startTime: "desc" }, take: 5 }),
     db.p2pTransfer.findMany({
@@ -27,20 +55,53 @@ export default async function Dashboard() {
       include: { fromUser: { select: { name: true, number: true } } },
       orderBy: { timestamp: "desc" }, take: 5
     }),
+    db.payoutTransaction.findMany({ where: { userId }, orderBy: { startTime: "desc" }, take: 5 }),
+    db.merchantTransaction.findMany({
+      where: { fromUserId: userId },
+      include: { merchant: { select: { name: true, email: true } } },
+      orderBy: { timestamp: "desc" }, take: 5
+    }),
+    // Windowed queries for the 7-day activity chart (independent of the take:5 lists above)
+    db.onRampTransaction.findMany({ where: { userId, status: "Success", startTime: { gte: sevenDaysAgo } }, select: { amount: true, startTime: true } }),
+    db.p2pTransfer.findMany({ where: { fromUserId: userId, timestamp: { gte: sevenDaysAgo } }, select: { amount: true, timestamp: true } }),
+    db.p2pTransfer.findMany({ where: { toUserId: userId, timestamp: { gte: sevenDaysAgo } }, select: { amount: true, timestamp: true } }),
+    db.merchantTransaction.findMany({ where: { fromUserId: userId, timestamp: { gte: sevenDaysAgo } }, select: { amount: true, timestamp: true } }),
+    db.payoutTransaction.findMany({ where: { userId, status: "Success", startTime: { gte: sevenDaysAgo } }, select: { amount: true, startTime: true } }),
   ]);
 
   // Merge and sort recent activity
-  type TxnItem = { id: number; type: "topup" | "sent" | "received"; label: string; amount: number; date: Date; status?: string };
+  type TxnItem = { id: number; type: "topup" | "sent" | "received" | "withdraw" | "merchant"; label: string; amount: number; date: Date; status?: string };
   const allTxns: TxnItem[] = [
     ...onRamp.map(t => ({ id: t.id, type: "topup" as const, label: `${t.provider} Top-up`, amount: t.amount, date: t.startTime, status: t.status })),
     ...sent.map(t => ({ id: t.id, type: "sent" as const, label: `To ${t.toUser.name ?? t.toUser.number}`, amount: t.amount, date: t.timestamp })),
     ...received.map(t => ({ id: t.id, type: "received" as const, label: `From ${t.fromUser.name ?? t.fromUser.number}`, amount: t.amount, date: t.timestamp })),
+    ...withdrawals.map(t => ({ id: t.id, type: "withdraw" as const, label: `Withdrawal to ${t.provider}`, amount: t.amount, date: t.startTime, status: t.status })),
+    ...merchantSent.map(t => ({ id: t.id, type: "merchant" as const, label: `To ${t.merchant.name ?? t.merchant.email}`, amount: t.amount, date: t.timestamp })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 8);
 
-  const totalSent = sent.reduce((a, t) => a + t.amount, 0);
+  const totalSent = sent.reduce((a, t) => a + t.amount, 0) + merchantSent.reduce((a, t) => a + t.amount, 0);
   const totalReceived = received.reduce((a, t) => a + t.amount, 0);
 
-  
+  const iconFor = (type: TxnItem["type"]) => type === "topup" ? "🏦" : type === "sent" ? "↗" : type === "received" ? "↙" : type === "withdraw" ? "🏧" : "🛍️";
+  const bgFor = (type: TxnItem["type"]) => type === "topup" ? "rgba(59,130,246,.12)" : type === "received" ? "rgba(5,150,105,.1)" : "rgba(220,38,38,.1)";
+  const isOutgoing = (type: TxnItem["type"]) => type === "sent" || type === "withdraw" || type === "merchant";
+
+  // Build 7-day chart data: "received" = topups + p2p received, "sent" = p2p sent + merchant payments + withdrawals
+  const { keys, labels } = dayBuckets(7);
+  const receivedByDay: Record<string, number> = Object.fromEntries(keys.map(k => [k, 0]));
+  const sentByDay: Record<string, number> = Object.fromEntries(keys.map(k => [k, 0]));
+
+  chartTopups.forEach(t => { const k = keyOf(t.startTime); if (k in receivedByDay) receivedByDay[k] += t.amount; });
+  chartReceived.forEach(t => { const k = keyOf(t.timestamp); if (k in receivedByDay) receivedByDay[k] += t.amount; });
+  chartSent.forEach(t => { const k = keyOf(t.timestamp); if (k in sentByDay) sentByDay[k] += t.amount; });
+  chartMerchantSent.forEach(t => { const k = keyOf(t.timestamp); if (k in sentByDay) sentByDay[k] += t.amount; });
+  chartWithdrawals.forEach(t => { const k = keyOf(t.startTime); if (k in sentByDay) sentByDay[k] += t.amount; });
+
+    const activityChartData = keys.map(k => ({
+    day: labels[k] ?? k,
+    received: Math.round((receivedByDay[k] ?? 0) / 100),
+    sent: Math.round((sentByDay[k] ?? 0) / 100),
+  }));
 
   return (
     <div>
@@ -130,7 +191,7 @@ export default async function Dashboard() {
           <div className="pf-stat">
             <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Total Sent</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 500, color: "#F87171" }}>₹{fmt(totalSent)}</div>
-            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{sent.length} transfers</div>
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{sent.length + merchantSent.length} transfers</div>
           </div>
           <div className="pf-stat">
             <div style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>Total Received</div>
@@ -143,6 +204,22 @@ export default async function Dashboard() {
               ₹{fmt(onRamp.reduce((a, t) => a + t.amount, 0))}
             </div>
             <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{onRamp.length} transactions</div>
+          </div>
+        </div>
+
+        {/* Charts row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16, marginBottom: 24 }}>
+          <div className="pf-card" style={{ padding: "20px 22px" }}>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Last 7 Days</div>
+            <ActivityChart data={activityChartData} />
+          </div>
+          <div className="pf-card" style={{ padding: "20px 22px" }}>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Balance Breakdown</div>
+            <BalanceDonut
+              available={(balance?.amount ?? 0) / 100}
+              locked={(balance?.locked ?? 0) / 100}
+              accentColor="#3B82F6"
+            />
           </div>
         </div>
 
@@ -165,13 +242,9 @@ export default async function Dashboard() {
                     <div style={{
                       width: 36, height: 36, borderRadius: 9, flexShrink: 0,
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-                      background: txn.type === "topup"
-                        ? "rgba(59,130,246,.12)"
-                        : txn.type === "sent"
-                          ? "rgba(220,38,38,.1)"
-                          : "rgba(5,150,105,.1)"
+                      background: bgFor(txn.type)
                     }}>
-                      {txn.type === "topup" ? "🏦" : txn.type === "sent" ? "↗" : "↙"}
+                      {iconFor(txn.type)}
                     </div>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 500 }}>{txn.label}</div>
@@ -191,9 +264,9 @@ export default async function Dashboard() {
                   </div>
                   <div style={{
                     fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 500,
-                    color: txn.type === "sent" ? "#F87171" : "#34D399"
+                    color: isOutgoing(txn.type) ? "#F87171" : "#34D399"
                   }}>
-                    {txn.type === "sent" ? "-" : "+"}₹{fmt(txn.amount)}
+                    {isOutgoing(txn.type) ? "-" : "+"}₹{fmt(txn.amount)}
                   </div>
                 </div>
               ))}

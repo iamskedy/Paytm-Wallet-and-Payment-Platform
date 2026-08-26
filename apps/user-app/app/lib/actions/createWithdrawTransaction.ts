@@ -16,7 +16,7 @@ export async function createWithdrawTransaction(amount: number, provider: string
   const userId = Number(session.user.id);
   const token = uuidv4();
 
-  await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {  
     const balance = await tx.balance.findUnique({ where: { userId } });
     if (!balance || balance.amount < parsed.data.amount) {
       throw new Error("Insufficient balance");
@@ -53,7 +53,7 @@ export async function createWithdrawTransaction(amount: number, provider: string
   const webhookUrl = process.env.BANK_WEBHOOK_URL || "http://localhost:3003";
 
   try {
-    const res = await fetch(`${webhookUrl}/hdfcWithdrawWebhook`, {
+     const res = await fetch(`${webhookUrl}/hdfcWithdrawWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-hdfc-signature": signature },
       body

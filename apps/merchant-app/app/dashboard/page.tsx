@@ -1,17 +1,42 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
-import db from "@repo/db/client";
+import db from "@repo/db/client"; 
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { ActivityChart } from "./ActivityChart";
+import { BalanceDonut } from "./BalanceDonut";
 
 
 function fmt(paise: number) {
   return (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function dayBuckets(days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const keys: string[] = [];
+  const labels: Record<string, string> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    keys.push(key);
+    labels[key] = d.toLocaleDateString("en-IN", { weekday: "short" });
+  }
+  return { keys, labels };
+}
+
+function keyOf(date: Date) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
 export default async function MerchantDashboard() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/api/auth/signin");
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
 
   const merchant = await db.merchant.findUnique({
     where: { email: session.user.email },
@@ -20,11 +45,27 @@ export default async function MerchantDashboard() {
       transactions: {
         orderBy: { timestamp: "desc" },
         take: 20,
+      },
+      payoutTransactions: {
+        orderBy: { startTime: "desc" },
+        take: 20,
       }
     }
   });
 
   const txns = merchant?.transactions ?? [];
+  const payouts = merchant?.payoutTransactions ?? [];
+
+  const [chartPayments, chartWithdrawals] = merchant ? await Promise.all([
+    db.merchantTransaction.findMany({
+      where: { merchantId: merchant.id, timestamp: { gte: sevenDaysAgo } },
+      select: { amount: true, timestamp: true }
+    }),
+    db.merchantPayoutTransaction.findMany({
+      where: { merchantId: merchant.id, status: "Success", startTime: { gte: sevenDaysAgo } },
+      select: { amount: true, startTime: true }
+    }),
+  ]) : [[], []];
 
   // MerchantTransaction has no fromUser relation — look up users separately
   const userIds = [...new Set(
@@ -51,7 +92,26 @@ export default async function MerchantDashboard() {
   const todayVolume = txns
     .filter((t: any) => new Date(t.timestamp).toDateString() === new Date().toDateString())
     .reduce((a: number, t: any) => a + t.amount, 0);
-  const recentTxns = txns.slice(0, 8);
+
+  // Merge incoming payments with outgoing withdrawals into one feed
+  type FeedItem = { id: number; type: "payment" | "withdraw"; label: string; amount: number; date: Date; status?: string };
+  const feed: FeedItem[] = [
+    ...txns.map((t: any) => ({ id: t.id, type: "payment" as const, label: getUserLabel(t), amount: t.amount, date: new Date(t.timestamp) })),
+    ...payouts.map((t: any) => ({ id: t.id, type: "withdraw" as const, label: `Withdrawal to ${t.provider}`, amount: t.amount, date: new Date(t.startTime), status: t.status })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 8);
+
+  // 7-day activity chart data
+  const { keys, labels } = dayBuckets(7);
+  const paymentsByDay: Record<string, number> = Object.fromEntries(keys.map(k => [k, 0]));
+  const withdrawalsByDay: Record<string, number> = Object.fromEntries(keys.map(k => [k, 0]));
+  chartPayments.forEach((t: any) => { const k = keyOf(t.timestamp); if (k in paymentsByDay) paymentsByDay[k] += t.amount; });
+  chartWithdrawals.forEach((t: any) => { const k = keyOf(t.startTime); if (k in withdrawalsByDay) withdrawalsByDay[k] += t.amount; });
+
+  const activityChartData = keys.map(k => ({
+  day: labels[k] ?? "",
+  payments: Math.round((paymentsByDay[k] ?? 0) / 100),
+  withdrawals: Math.round((withdrawalsByDay[k] ?? 0) / 100),
+}));
 
   return (
     <div>
@@ -157,37 +217,66 @@ export default async function MerchantDashboard() {
           </div>
         </div>
 
-        {/* Recent Payments */}
+        {/* Charts row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16, marginBottom: 24 }}>
+          <div className="m-card" style={{ padding: "20px 22px" }}>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Last 7 Days</div>
+            <ActivityChart data={activityChartData} />
+          </div>
+          <div className="m-card" style={{ padding: "20px 22px" }}>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Balance Breakdown</div>
+            <BalanceDonut
+              available={(merchant?.balance?.amount ?? 0) / 100}
+              locked={(merchant?.balance?.locked ?? 0) / 100}
+              accentColor="#10B981"
+            />
+          </div>
+        </div>
+
+        {/* Recent Activity */}
         <div className="m-card" style={{ padding: "20px 22px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600 }}>Recent Payments</div>
+            <div style={{ fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600 }}>Recent Activity</div>
             <Link href="/transactions" style={{ fontSize: 12, color: "var(--acc)", textDecoration: "none" }}>View all →</Link>
           </div>
-          {recentTxns.length === 0 ? (
+          {feed.length === 0 ? (
             <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text3)", fontSize: 13 }}>
-              No payments yet. Share a payment link to get started!
+              No activity yet. Share a payment link to get started!
             </div>
           ) : (
-            recentTxns.map((txn: any) => (
-              <div key={txn.id} className="m-txn-row">
+            feed.map((item) => (
+              <div key={`${item.type}-${item.id}`} className="m-txn-row">
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{
                     width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-                    background: "rgba(16,185,129,.1)",
+                    background: item.type === "payment" ? "rgba(16,185,129,.1)" : "rgba(220,38,38,.1)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "var(--font-head)", fontSize: 13, fontWeight: 700, color: "#10B981"
+                    fontFamily: "var(--font-head)", fontSize: item.type === "payment" ? 13 : 16, fontWeight: 700,
+                    color: item.type === "payment" ? "#10B981" : "#F87171"
                   }}>
-                    {(getUserLabel(txn)[0] ?? "U").toUpperCase()}
+                    {item.type === "payment" ? (item.label[0] ?? "U").toUpperCase() : "🏧"}
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{getUserLabel(txn)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</div>
                     <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "var(--font-mono)" }}>
-                      {new Date(txn.timestamp).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {item.date.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {item.status && (
+                        <span style={{
+                          marginLeft: 8, fontSize: 10, padding: "1px 6px", borderRadius: 4,
+                          background: item.status === "Success" ? "rgba(5,150,105,.15)" : item.status === "Failure" ? "rgba(220,38,38,.1)" : "rgba(217,119,6,.1)",
+                          color: item.status === "Success" ? "#34D399" : item.status === "Failure" ? "#F87171" : "#FBB350"
+                        }}>
+                          {item.status}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 500, color: "#34D399" }}>
-                  +₹{fmt(txn.amount)}
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 500,
+                  color: item.type === "payment" ? "#34D399" : "#F87171"
+                }}>
+                  {item.type === "payment" ? "+" : "-"}₹{fmt(item.amount)}
                 </div>
               </div>
             ))

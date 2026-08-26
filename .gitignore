@@ -52,3 +52,5 @@ packages.zip
 ui-output/
 
 ui-output/
+
+typings/*.log

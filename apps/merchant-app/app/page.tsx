@@ -1,17 +1,34 @@
 "use client";
-import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const USER_APP_URL = process.env.NEXT_PUBLIC_USER_APP_URL || "http://localhost:3001";
 
 export default function MerchantHome(): JSX.Element {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"signin" | "signup">("signin");
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      router.replace("/dashboard");
+    }
+  }, [status, session, router]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     await signIn("google", { callbackUrl: "/dashboard" });
   };
+
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ fontSize: 15, color: "var(--text2)" }}>Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="m-login-bg">
@@ -19,12 +36,12 @@ export default function MerchantHome(): JSX.Element {
       <div style={{ position: "absolute", bottom: -100, right: -80, width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(13,148,136,.14) 0%, transparent 70%)", filter: "blur(80px)", pointerEvents: "none" }} />
 
       {/* Top nav */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", borderBottom: "1px solid var(--border)", background: "rgba(7,16,29,0.7)", backdropFilter: "blur(12px)" }}>
+      <nav className="m-landing-nav">
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-head)", fontSize: 18, fontWeight: 700, letterSpacing: "-.4px" }}>
           <div style={{ width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg,#059669,#10B981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>💳</div>
           PayFlow Pro
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="m-landing-nav-links" style={{ display: "flex", gap: 6 }}>
           {["Features", "Security", "Developers"].map(l => (
             <a key={l} href="#" style={{ padding: "7px 14px", borderRadius: 8, fontSize: 13, color: "var(--text2)", textDecoration: "none" }}>{l}</a>
           ))}
@@ -32,10 +49,10 @@ export default function MerchantHome(): JSX.Element {
       </nav>
 
       {/* 3-col layout */}
-      <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 1200, display: "grid", gridTemplateColumns: "1fr 460px 1fr", alignItems: "center", padding: "100px 24px 40px", margin: "0 auto" }}>
+      <div className="m-landing-grid">
 
         {/* Left panel */}
-        <aside style={{ padding: "0 40px" }}>
+        <aside className="m-landing-aside" style={{ padding: "0 40px" }}>
           <div style={{ fontFamily: "var(--font-head)", fontSize: "clamp(26px,3vw,44px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-1.5px", marginBottom: 20 }}>
             Payments at<br />the speed of<br />
             <span style={{ background: "linear-gradient(135deg,#059669,#10B981)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>trust</span>
@@ -58,7 +75,7 @@ export default function MerchantHome(): JSX.Element {
         </aside>
 
         {/* Center card */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 0" }}>
+        <div className="m-landing-center">
           <div className="m-card m-anim-rise" style={{ width: "100%", padding: 40, position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)", width: "60%", height: 1, background: "linear-gradient(90deg, transparent, #10B981, transparent)" }} />
 
@@ -124,7 +141,7 @@ export default function MerchantHome(): JSX.Element {
         </div>
 
         {/* Right panel */}
-        <aside style={{ padding: "0 40px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <aside className="m-landing-aside" style={{ padding: "0 40px", display: "flex", flexDirection: "column", gap: 16 }}>
           {[
             { label: "Merchant Volume Today", value: "₹12.4L", change: "↑ 8.3% vs yesterday" },
             { label: "Active Merchants", value: "48,200", change: "↑ 2.1% this week" },
@@ -159,7 +176,52 @@ export default function MerchantHome(): JSX.Element {
         ))}
       </div>
 
-      <style>{`@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}} @media(max-width:900px){aside{display:none!important}}`}</style>
+      <style>{`
+        @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+
+        .m-landing-nav {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 20px 40px;
+          border-bottom: 1px solid var(--border);
+          background: rgba(7,16,29,0.7);
+          backdrop-filter: blur(12px);
+        }
+
+        .m-landing-grid {
+          position: relative; z-index: 1;
+          width: 100%; max-width: 1200px;
+          display: grid;
+          grid-template-columns: 1fr 460px 1fr;
+          align-items: start;
+          padding: 100px 24px 40px;
+          margin: 0 auto;
+        }
+
+        .m-landing-center {
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px 0;
+        }
+
+        /* Below this, side panels are hidden and the grid collapses to a
+           single centered column so the card actually goes full width
+           instead of being stuck in its 460px track with dead space either side. */
+        @media (max-width: 1100px) {
+          .m-landing-grid {
+            grid-template-columns: 1fr;
+            padding-top: 90px;
+          }
+          .m-landing-aside { display: none !important; }
+          .m-landing-center { padding: 0 16px; }
+        }
+
+        @media (max-width: 640px) {
+          .m-landing-nav { padding: 14px 20px; }
+          .m-landing-nav-links { display: none !important; }
+          .m-landing-grid { padding: 80px 12px 24px; }
+          .m-card.m-anim-rise { padding: 28px 20px !important; }
+        }
+      `}</style>
     </div>
   );
 }

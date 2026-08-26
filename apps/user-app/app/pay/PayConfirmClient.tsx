@@ -19,19 +19,35 @@ export function PayConfirmClient({ requestId }: { requestId: string }) {
   };
 
   if (status === "success") {
-    return <p className="text-green-600 font-medium">{message}</p>;
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        padding: "13px", borderRadius: 10,
+        background: "rgba(5,150,105,.1)", border: "1px solid rgba(5,150,105,.25)",
+        color: "#34D399", fontFamily: "var(--font-head)", fontSize: 15, fontWeight: 600
+      }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        {message}
+      </div>
+    );
   }
 
   return (
     <div>
-      <button
-        onClick={handlePay}
-        disabled={status === "loading"}
-        className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
-      >
-        {status === "loading" ? "Processing..." : "Confirm & Pay"}
+      <button className="pf-btn" onClick={handlePay} disabled={status === "loading"}>
+        {status === "loading" ? "Processing…" : "Confirm & Pay"}
       </button>
-      {status === "error" && <p className="text-sm text-red-500 mt-3">{message}</p>}
+      {status === "error" && (
+        <div style={{
+          marginTop: 14, padding: "10px 14px",
+          background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.2)",
+          borderRadius: 8, fontSize: 12, color: "#F87171"
+        }}>
+          {message}
+        </div>
+      )}
     </div>
   );
 }
