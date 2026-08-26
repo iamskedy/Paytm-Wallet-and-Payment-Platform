@@ -74,6 +74,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /home/ubuntu/payflow
             aws ecr get-login-password --region ${{ env.AWS_REGION }} \
               | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
