@@ -25,6 +25,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=pruner /app/out/full/ .
+COPY packages/docs ./packages/docs
 RUN npx turbo run build --filter=web
 
 # IMPORTANT: apps/merchant-app/next.config.js must have output: 'standalone'
