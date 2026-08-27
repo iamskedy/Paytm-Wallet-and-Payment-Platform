@@ -16,7 +16,12 @@ export const authOptions = {
         httpOnly: true,
         sameSite: "lax" as const,
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        // TEMPORARY FOR TESTING ONLY: forced to false because the app is
+        // currently served over plain HTTP (no TLS). A "Secure" cookie is
+        // silently dropped by the browser on non-HTTPS origins, which was
+        // breaking login. Revert to `process.env.NODE_ENV === "production"`
+        // once this app is served over HTTPS.
+        secure: false,
       },
     },
   },
