@@ -26,24 +26,22 @@ WORKDIR /app
 COPY --from=installer /app/ .
 COPY --from=pruner /app/out/full/ .
 COPY packages/docs ./packages/docs
+RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
 RUN npx turbo run build --filter=web
-
 # IMPORTANT: apps/merchant-app/next.config.js must have output: 'standalone'
 # NOT CONFIRMED YET — check this file before building, the Dockerfile will fail without it
 
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 USER nextjs
-
 COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/.next/static ./apps/merchant-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/merchant-app/public ./apps/merchant-app/public
-
 EXPOSE 3001
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
-
 CMD ["node", "apps/merchant-app/server.js"]
